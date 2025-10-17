@@ -1,0 +1,64 @@
+workflows:
+  ios-workflow:
+    name: Nayafits iOS Build
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      vars:
+        APP_STORE_CONNECT_ISSUER_ID: Encrypted(...) # Add your App Store Connect issuer ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: Encrypted(...) # Add your App Store Connect key ID
+        APP_STORE_CONNECT_PRIVATE_KEY: Encrypted(...) # Add your App Store Connect private key
+        CERTIFICATE_PRIVATE_KEY: Encrypted(...) # Add your certificate private key
+        BUNDLE_ID: com.nayafits.app # Your app bundle ID
+        APP_STORE_CONNECT_PASSWORD: Encrypted(...) # Your App Store Connect password
+        APP_STORE_CONNECT_USERNAME: Encrypted(...) # Your App Store Connect username
+    scripts:
+      - name: Set up keychain to be used for codesigning
+        script: |
+          keychain initialize
+      - name: Fetch signing files
+        script: |
+          # Fetch the certificate and provisioning profile
+          app-store-connect fetch-signing-files $BUNDLE_ID --type IOS_APP_STORE --create
+      - name: Set up signing certificate
+        script: |
+          keychain add-certificates
+      - name: Set up code signing settings on Xcode project
+        script: |
+          xcode-project use-profiles
+      - name: Get Flutter packages
+        script: |
+          flutter packages pub get
+      - name: Install pods
+        script: |
+          find . -name "Podfile" -execdir pod install \;
+      - name: Flutter analyze
+        script: |
+          flutter analyze
+      - name: Flutter unit tests
+        script: |
+          flutter test
+      - name: Build ipa for distribution
+        script: |
+          flutter build ipa --release \
+            --build-name=1.0.0 \
+            --build-number=$(($(app-store-connect get-latest-build-number "$BUNDLE_ID") + 1))
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - group name 1
+          - group name 2
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: false
